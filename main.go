@@ -10,9 +10,13 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/mark3labs/mcp-go/server"
@@ -35,6 +39,9 @@ var (
 var (
 	debug       = flag.Bool("debug", false, "Enable verbose debug logging")
 	showVersion = flag.Bool("version", false, "Show version information and exit")
+	transport   = flag.String("transport", "stdio", "Transport mode: stdio or streamable-http")
+	httpPort    = flag.Int("port", 8080, "HTTP port for streamable-http transport (also read from MCP_PORT)")
+	httpHost    = flag.String("host", "0.0.0.0", "HTTP bind address for streamable-http transport (also read from MCP_HOST)")
 	// CLI execution mode
 	executeMode  = flag.Bool("execute", false, "Execute a single action and exit (CLI mode)")
 	serviceType  = flag.String("service", "", "Service type for CLI execution (e.g., urn:dslforum-org:service:DeviceInfo:1)")
@@ -65,6 +72,14 @@ func main() {
 func run() error {
 	// Set up logging
 	log.SetOutput(os.Stderr) // MCP uses stdout for protocol, stderr for logs
+	applyHTTPEnvDefaults()
+
+	switch *transport {
+	case "stdio", "streamable-http":
+	default:
+		fmt.Fprintf(os.Stderr, "Error: invalid transport %q. Valid values: stdio, streamable-http\n", *transport)
+		os.Exit(1)
+	}
 
 	// If --setup flag is set, run interactive setup
 	if *setupMode {
@@ -122,7 +137,89 @@ func run() error {
 	mcpSrv := newServer(serverName, version, tr064Client, registry, docsIndex, configErr)
 
 	log.Println("MCP server ready")
-	return server.ServeStdio(mcpSrv.getMCPServer())
+	switch *transport {
+	case "stdio":
+		return server.ServeStdio(mcpSrv.getMCPServer())
+	case "streamable-http":
+		return serveHTTP(mcpSrv)
+	default:
+		return fmt.Errorf("invalid transport %q", *transport)
+	}
+}
+
+func applyHTTPEnvDefaults() {
+	provided := map[string]bool{}
+	flag.Visit(func(f *flag.Flag) {
+		provided[f.Name] = true
+	})
+
+	if !provided["port"] {
+		if v := os.Getenv("MCP_PORT"); v != "" {
+			if p, err := strconv.Atoi(v); err == nil {
+				*httpPort = p
+			}
+		}
+	}
+
+	if !provided["host"] {
+		if v := os.Getenv("MCP_HOST"); v != "" {
+			*httpHost = v
+		}
+	}
+}
+
+func serveHTTP(mcpSrv *mcpServer) error {
+	addr := fmt.Sprintf("%s:%d", *httpHost, *httpPort)
+
+	mcpHandler := server.NewStreamableHTTPServer(
+		mcpSrv.getMCPServer(),
+		server.WithEndpointPath("/mcp"),
+	)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+	mux.Handle("/mcp", mcpHandler)
+
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: mux,
+	}
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(stop)
+
+	serverErr := make(chan error, 1)
+	go func() {
+		log.Printf("HTTP server listening on %s (MCP endpoint: /mcp, health: /healthz)", addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErr <- err
+			return
+		}
+		serverErr <- nil
+	}()
+
+	select {
+	case sig := <-stop:
+		log.Printf("Shutting down HTTP server after %s...", sig)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return srv.Shutdown(ctx)
+	case err := <-serverErr:
+		if err != nil {
+			return fmt.Errorf("HTTP server error: %w", err)
+		}
+		return nil
+	}
 }
 
 // runSetupMode runs the interactive setup flow
