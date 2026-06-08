@@ -1,0 +1,9 @@
+.git/
+.env
+.sisyphus/
+build/
+dist/
+*.test
+*.out
+fritz-mcp
+fritzbox-mcp-server

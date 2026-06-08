@@ -1,0 +1,31 @@
+services:
+  fritzbox-mcp:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: fritzbox-mcp-server:latest
+    stdin_open: true
+    tty: false
+    env_file:
+      - path: .env
+        required: false
+
+  fritzbox-mcp-http:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: fritzbox-mcp-server:latest
+    profiles:
+      - http
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "${MCP_PORT:-8080}:${MCP_PORT:-8080}"
+    command: ["--transport", "streamable-http", "--port", "${MCP_PORT:-8080}", "--host", "0.0.0.0"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${MCP_PORT:-8080}/healthz | grep -q '^ok$'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 3s

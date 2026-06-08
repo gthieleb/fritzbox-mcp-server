@@ -35,3 +35,10 @@ docs/avm/*.pdf
 /dist/
 build
 README.html
+
+# Docker compose
+docker-compose.override.yml
+
+# Environment files
+.env.*
+!.env.example
