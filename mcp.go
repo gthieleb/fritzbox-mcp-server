@@ -193,8 +193,8 @@ func isReadOnlyAction(actionName string) bool {
 }
 
 // createActionHandler creates a handler for a no-argument action
-func (s *mcpServer) createActionHandler(serviceType, actionName string) func(map[string]interface{}) (*mcp.CallToolResult, error) {
-	return func(args map[string]interface{}) (*mcp.CallToolResult, error) {
+func (s *mcpServer) createActionHandler(serviceType, actionName string) server.ToolHandlerFunc {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if s.configError != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Action failed: %v", s.configError)), nil
 		}
@@ -208,7 +208,6 @@ func (s *mcpServer) createActionHandler(serviceType, actionName string) func(map
 		serviceSpec := s.registry.Services[serviceType]
 
 		// call FRITZ!Box API
-		ctx := context.Background()
 		result, err := s.tr064.call(ctx, serviceSpec, actionSpec, map[string]string{})
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("API call failed: %v", err)), nil
@@ -225,7 +224,7 @@ func (s *mcpServer) createActionHandler(serviceType, actionName string) func(map
 }
 
 // handleListServices implements list_services
-func (s *mcpServer) handleListServices(args map[string]interface{}) (*mcp.CallToolResult, error) {
+func (s *mcpServer) handleListServices(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if s.configError != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Action failed: %v", s.configError)), nil
 	}
@@ -248,11 +247,12 @@ func (s *mcpServer) handleListServices(args map[string]interface{}) (*mcp.CallTo
 }
 
 // handleListActions implements list_actions
-func (s *mcpServer) handleListActions(args map[string]interface{}) (*mcp.CallToolResult, error) {
+func (s *mcpServer) handleListActions(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if s.configError != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Action failed: %v", s.configError)), nil
 	}
 
+	args, _ := request.Params.Arguments.(map[string]interface{})
 	serviceType, ok := args["service_type"].(string)
 	if !ok {
 		return mcp.NewToolResultError("service_type is required"), nil
@@ -292,11 +292,12 @@ func (s *mcpServer) handleListActions(args map[string]interface{}) (*mcp.CallToo
 }
 
 // handleDescribeAction implements describe_action
-func (s *mcpServer) handleDescribeAction(args map[string]interface{}) (*mcp.CallToolResult, error) {
+func (s *mcpServer) handleDescribeAction(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if s.configError != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Action failed: %v", s.configError)), nil
 	}
 
+	args, _ := request.Params.Arguments.(map[string]interface{})
 	serviceType, ok := args["service_type"].(string)
 	if !ok {
 		return mcp.NewToolResultError("service_type is required"), nil
@@ -358,11 +359,12 @@ func (s *mcpServer) handleDescribeAction(args map[string]interface{}) (*mcp.Call
 }
 
 // handleCallAction implements the generic call_action tool
-func (s *mcpServer) handleCallAction(args map[string]interface{}) (*mcp.CallToolResult, error) {
+func (s *mcpServer) handleCallAction(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if s.configError != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Action failed: %v", s.configError)), nil
 	}
 
+	args, _ := request.Params.Arguments.(map[string]interface{})
 	serviceType, ok := args["service_type"].(string)
 	if !ok {
 		return mcp.NewToolResultError("service_type is required"), nil
@@ -397,7 +399,6 @@ func (s *mcpServer) handleCallAction(args map[string]interface{}) (*mcp.CallTool
 	}
 
 	// call FRITZ!Box API
-	ctx := context.Background()
 	result, err := s.tr064.call(ctx, serviceSpec, actionSpec, inputArgs)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("API call failed: %v", err)), nil

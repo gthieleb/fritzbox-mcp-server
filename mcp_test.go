@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -34,20 +35,26 @@ func TestMCPUnconfiguredState(t *testing.T) {
 			var result *mcp.CallToolResult
 			var err error
 
-			// We need to call the handlers directly
-			// The handlers take map[string]interface{} as arguments
-			args := map[string]interface{}{}
-
 			switch tt.toolName {
 			case "list_services":
-				result, err = srv.handleListServices(args)
+				result, err = srv.handleListServices(context.Background(), mcp.CallToolRequest{})
 			case "list_actions":
-				args["service_type"] = "any"
-				result, err = srv.handleListActions(args)
+				result, err = srv.handleListActions(context.Background(), mcp.CallToolRequest{
+					Params: mcp.CallToolParams{
+						Arguments: map[string]interface{}{
+							"service_type": "any",
+						},
+					},
+				})
 			case "call_action":
-				args["service_type"] = "any"
-				args["action"] = "any"
-				result, err = srv.handleCallAction(args)
+				result, err = srv.handleCallAction(context.Background(), mcp.CallToolRequest{
+					Params: mcp.CallToolParams{
+						Arguments: map[string]interface{}{
+							"service_type": "any",
+							"action":       "any",
+						},
+					},
+				})
 			}
 
 			if err != nil {
@@ -100,7 +107,7 @@ func TestUnconfiguredNoArgumentTools(t *testing.T) {
 	// The tool handler should be created even if config is bad
 	handler := srv.createActionHandler("urn:test:service:1", "GetStatus")
 
-	result, err := handler(nil)
+	result, err := handler(context.Background(), mcp.CallToolRequest{})
 	if err != nil {
 		t.Fatalf("Handler failed: %v", err)
 	}
