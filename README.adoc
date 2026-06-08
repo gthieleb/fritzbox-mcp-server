@@ -752,6 +752,98 @@ Container Images::
 * Multi-arch: linux/amd64, linux/arm64 (recommended for production)
 * WASI: wasm (portability demo - Go wasip1 lacks network APIs)
 
+== Docker
+
+The server can be run in a container for easier deployment and isolation.
+
+=== Quick Start
+
+Build and run with Docker Compose:
+
+[source,bash]
+----
+docker compose --profile http up --build -d
+curl http://localhost:8080/healthz
+docker compose --profile http down
+----
+
+=== stdio Mode (Claude Desktop)
+
+Run the server in stdio mode for MCP client integration:
+
+[source,bash]
+----
+docker run --rm -i --env-file .env fritzbox-mcp-server:latest
+----
+
+Configure in `claude_desktop_config.json`:
+
+[source,json]
+----
+{
+  "mcpServers": {
+    "fritzbox": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "--env-file", ".env", "fritzbox-mcp-server:latest"]
+    }
+  }
+}
+----
+
+=== HTTP Mode
+
+Start the server with the Streamable HTTP transport:
+
+[source,bash]
+----
+docker compose --profile http up -d
+----
+
+The HTTP service includes a built-in healthcheck. The health endpoint is available at `http://localhost:8080/healthz`.
+
+Configure port via `MCP_PORT` in `.env` or environment variable (default: 8080).
+
+=== Overlay Usage
+
+Production overlay (restart policy, logging, resource limits):
+
+[source,bash]
+----
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile http up -d
+----
+
+Development overlay (debug mode, TLS disabled):
+
+[source,bash]
+----
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile http up
+----
+
+For local customization, copy the desired overlay to `docker-compose.override.yml` (automatically loaded by Compose).
+
+=== Environment Variables
+
+Reference the `.env.example` file for all configuration variables:
+
+`FRITZ_HOST`:: FRITZ!Box hostname or IP (required)
+`FRITZ_PORT`:: Service port (default: 49000)
+`FRITZ_USERNAME`:: FRITZ!Box username (required)
+`FRITZ_PASSWORD`:: FRITZ!Box password (required)
+`FRITZ_TLS`:: Enable TLS (optional, default: true)
+`MCP_PORT`:: HTTP transport port (optional, default: 8080)
+`MCP_HOST`:: HTTP bind address (optional, default: 0.0.0.0)
+
+=== Multi-Architecture Builds
+
+Use the Makefile target for multi-architecture container builds:
+
+[source,bash]
+----
+make container-multiarch
+----
+
+Multi-arch container images (linux/amd64, linux/arm64) are automatically published to ghcr.io/kambriso/fritzbox-mcp-server on release.
+
 == Support
 
 Issues:: https://github.com/kambriso/fritzbox-mcp-server/issues
