@@ -1,0 +1,29 @@
+# docker-compose.override.yml.example
+#
+# Kopiere diese Datei nach docker-compose.override.yml und passe sie an.
+# docker-compose.override.yml wird automatisch von docker compose geladen
+# und ist in .gitignore, sodass keine Credentials committed werden.
+#
+# Verwendung:
+#   docker compose --profile http up        # HTTP-Modus (lokal)
+#   docker compose up                       # stdio-Modus (für Claude Desktop etc.)
+
+services:
+  fritzbox-mcp-http:
+    # Lokale Entwicklung: debug + kein TLS für LAN-Fritzbox
+    command: ["--transport", "streamable-http", "--port", "${MCP_PORT:-8080}", "--host", "0.0.0.0", "--debug"]
+    environment:
+      - FRITZ_TLS=false
+
+    # Produktion: restart + logging + Ressourcen-Limits
+    # restart: unless-stopped
+    # logging:
+    #   driver: json-file
+    #   options:
+    #     max-size: "10m"
+    #     max-file: "3"
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 256M
+    #       cpus: "0.5"
