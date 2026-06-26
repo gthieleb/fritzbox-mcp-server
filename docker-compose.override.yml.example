@@ -2,20 +2,33 @@
 #
 # Kopiere diese Datei nach docker-compose.override.yml und passe sie an.
 # docker-compose.override.yml wird automatisch von docker compose geladen
-# und ist in .gitignore, sodass keine Credentials committed werden.
+# und ist in .gitignore (keine Credentials im Repo).
 #
-# Verwendung:
-#   docker compose --profile http up        # HTTP-Modus (lokal)
-#   docker compose up                       # stdio-Modus (für Claude Desktop etc.)
+# Ohne override.yml läuft der Service im stdio-Modus (Default, für docker run -i).
+# Mit override.yml läuft er im HTTP-Modus (siehe command unten).
+#
+#   cp docker-compose.override.yml.example docker-compose.override.yml
+#   docker compose up --build -d
+#   curl http://localhost:8080/healthz
 
 services:
-  fritzbox-mcp-http:
-    # Lokale Entwicklung: debug + kein TLS für LAN-Fritzbox
-    command: ["--transport", "streamable-http", "--port", "${MCP_PORT:-8080}", "--host", "0.0.0.0", "--debug"]
+  fritzbox-mcp:
+    stdin_open: false
+    tty: false
+    ports:
+      - "${MCP_PORT:-8080}:${MCP_PORT:-8080}"
+    command: ["--transport", "streamable-http", "--port", "${MCP_PORT:-8080}", "--host", "0.0.0.0"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz | grep -q 'ok'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+    # --- Optionale Anpassungen (ein-/auskommentieren) ---
+    # Entwicklung: debug-Flag (command oben um "--debug" ergänzen)
     environment:
-      - FRITZ_TLS=false
-
-    # Produktion: restart + logging + Ressourcen-Limits
+      - FRITZ_TLS=false   # TLS aus für lokale LAN-Fritzbox; für Prod auf true setzen
+    # Produktion: restart, logging, Ressourcen-Limits
     # restart: unless-stopped
     # logging:
     #   driver: json-file
